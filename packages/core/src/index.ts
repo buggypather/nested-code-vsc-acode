@@ -339,3 +339,198 @@ export function findEmbeddedRegions(
 
   return regions;
 }
+
+
+export type MarkupTokenKind =
+  | "tag"
+  | "attribute"
+  | "attributeValue"
+  | "text"
+  | "comment"
+  | "doctype"
+  | "processingInstruction"
+  | "cdata"
+  | "punctuation"
+  | "invalid";
+
+export interface MarkupToken {
+  kind: MarkupTokenKind;
+  start: number;
+  end: number;
+  depth: number;
+}
+
+function isMarkupNameStart(ch: string | undefined): boolean {
+  return !!ch && /[A-Za-z_:]/.test(ch);
+}
+
+function isMarkupNameChar(ch: string | undefined): boolean {
+  return !!ch && /[A-Za-z0-9_:.-]/.test(ch);
+}
+
+function scanMarkupName(source: string, start: number, limit: number): number {
+  let i = start;
+  if (!isMarkupNameStart(source[i])) return i;
+  i++;
+  while (i < limit && isMarkupNameChar(source[i])) i++;
+  return i;
+}
+
+function skipMarkupWhitespace(source: string, start: number, limit: number): number {
+  let i = start;
+  while (i < limit && isWhitespace(source[i])) i++;
+  return i;
+}
+
+export function tokenizeMarkup(
+  source: string,
+  start = 0,
+  end = source.length
+): MarkupToken[] {
+  const tokens: MarkupToken[] = [];
+  const tagStack: string[] = [];
+  let i = Math.max(0, start);
+  const limit = Math.min(source.length, Math.max(i, end));
+
+  while (i < limit) {
+    if (source.startsWith("<!--", i)) {
+      const close = source.indexOf("-->", i + 4);
+      const tokenEnd = close === -1 || close + 3 > limit ? limit : close + 3;
+      tokens.push({ kind: "comment", start: i, end: tokenEnd, depth: tagStack.length });
+      i = tokenEnd;
+      continue;
+    }
+
+    if (source.startsWith("<![CDATA[", i)) {
+      const close = source.indexOf("]]>", i + 9);
+      const tokenEnd = close === -1 || close + 3 > limit ? limit : close + 3;
+      tokens.push({ kind: "cdata", start: i, end: tokenEnd, depth: tagStack.length });
+      i = tokenEnd;
+      continue;
+    }
+
+    if (/^<!DOCTYPE(?:\s|>)/i.test(source.slice(i, limit))) {
+      const close = source.indexOf(">", i + 2);
+      const tokenEnd = close === -1 || close + 1 > limit ? limit : close + 1;
+      tokens.push({ kind: "doctype", start: i, end: tokenEnd, depth: tagStack.length });
+      i = tokenEnd;
+      continue;
+    }
+
+    if (source.startsWith("<?", i)) {
+      const close = source.indexOf("?>", i + 2);
+      const tokenEnd = close === -1 || close + 2 > limit ? limit : close + 2;
+      tokens.push({
+        kind: "processingInstruction",
+        start: i,
+        end: tokenEnd,
+        depth: tagStack.length
+      });
+      i = tokenEnd;
+      continue;
+    }
+
+    if (source[i] !== "<") {
+      const textStart = i;
+      const next = source.indexOf("<", i);
+      i = next === -1 || next > limit ? limit : next;
+      if (i > textStart) {
+        tokens.push({ kind: "text", start: textStart, end: i, depth: tagStack.length });
+      }
+      continue;
+    }
+
+    const tagStart = i;
+    const closing = source[i + 1] === "/";
+    tokens.push({ kind: "punctuation", start: i, end: i + (closing ? 2 : 1), depth: tagStack.length });
+    i += closing ? 2 : 1;
+    i = skipMarkupWhitespace(source, i, limit);
+
+    const nameStart = i;
+    const nameEnd = scanMarkupName(source, i, limit);
+    if (nameEnd === nameStart) {
+      tokens.push({ kind: "invalid", start: tagStart, end: Math.min(tagStart + 1, limit), depth: tagStack.length });
+      i = Math.max(i, tagStart + 1);
+      continue;
+    }
+
+    const tagName = source.slice(nameStart, nameEnd);
+    const normalizedName = tagName.toLowerCase();
+    const tagDepth = closing ? Math.max(0, tagStack.length - 1) : tagStack.length;
+    tokens.push({ kind: "tag", start: nameStart, end: nameEnd, depth: tagDepth });
+    i = nameEnd;
+
+    if (closing) {
+      i = skipMarkupWhitespace(source, i, limit);
+      if (source[i] === ">") {
+        tokens.push({ kind: "punctuation", start: i, end: i + 1, depth: tagDepth });
+        i++;
+      }
+      if (tagStack.at(-1)?.toLowerCase() === normalizedName) {
+        tagStack.pop();
+      } else {
+        const match = tagStack.map((name) => name.toLowerCase()).lastIndexOf(normalizedName);
+        if (match !== -1) tagStack.splice(match);
+      }
+      continue;
+    }
+
+    let selfClosing = false;
+    while (i < limit) {
+      i = skipMarkupWhitespace(source, i, limit);
+
+      if (source.startsWith("/>", i)) {
+        tokens.push({ kind: "punctuation", start: i, end: i + 2, depth: tagStack.length });
+        i += 2;
+        selfClosing = true;
+        break;
+      }
+
+      if (source[i] === ">") {
+        tokens.push({ kind: "punctuation", start: i, end: i + 1, depth: tagStack.length });
+        i++;
+        break;
+      }
+
+      const attrStart = i;
+      const attrEnd = scanMarkupName(source, i, limit);
+      if (attrEnd === attrStart) {
+        tokens.push({ kind: "invalid", start: i, end: Math.min(i + 1, limit), depth: tagStack.length });
+        i++;
+        continue;
+      }
+
+      tokens.push({ kind: "attribute", start: attrStart, end: attrEnd, depth: tagStack.length });
+      i = skipMarkupWhitespace(source, attrEnd, limit);
+
+      if (source[i] !== "=") continue;
+      tokens.push({ kind: "punctuation", start: i, end: i + 1, depth: tagStack.length });
+      i++;
+      i = skipMarkupWhitespace(source, i, limit);
+
+      const quote = source[i];
+      if (quote === '"' || quote === "'") {
+        const valueStart = i;
+        i++;
+        while (i < limit && source[i] !== quote) i++;
+        if (i < limit) i++;
+        tokens.push({ kind: "attributeValue", start: valueStart, end: i, depth: tagStack.length });
+      } else {
+        const valueStart = i;
+        while (
+          i < limit &&
+          !isWhitespace(source[i]) &&
+          source[i] !== ">" &&
+          !source.startsWith("/>", i)
+        ) i++;
+        if (i > valueStart) {
+          tokens.push({ kind: "attributeValue", start: valueStart, end: i, depth: tagStack.length });
+        }
+      }
+    }
+
+    if (!selfClosing) tagStack.push(tagName);
+  }
+
+  return tokens;
+}
