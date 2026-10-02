@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/main.js --bundle --format=esm --platform=browser --outfile=dist/main.js",
-    "package": "npm run build && cd dist && zip -r ../nested-code-acode.zip main.js"
+    "package": "npm run build && rm -f nested-code-acode.zip && zip -r nested-code-acode.zip plugin.json README.md dist/main.js"
   },
   "dependencies": {
     "@nested-code/core": "0.1.0"

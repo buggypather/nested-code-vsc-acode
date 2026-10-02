@@ -15,3 +15,11 @@ jobs:
       - run: npm install
       - run: npm test
       - run: npm run build
+      - run: npm run package -w nested-code-vscode
+      - run: npm run package -w nested-code-acode
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nested-code-installers
+          path: |
+            packages/vscode/*.vsix
+            packages/acode/*.zip
