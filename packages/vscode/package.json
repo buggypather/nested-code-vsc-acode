@@ -15,9 +15,9 @@
     "onLanguage:json", "onLanguage:jsonc", "onLanguage:javascript",
     "onLanguage:typescript", "onLanguage:javascriptreact", "onLanguage:typescriptreact"
   ],
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.bundle.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && esbuild dist/extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "build": "tsc -p tsconfig.json && esbuild dist/extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.bundle.js",
     "package": "npm run build && vsce package --no-dependencies"
   },
   "dependencies": { "@nested-code/core": "0.1.0" },

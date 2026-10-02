@@ -104,10 +104,11 @@ class NestedCodePlugin {
     }
 
     this.compartment = new Compartment();
+    const cm = this.cm;
     const Plugin = ViewPlugin.fromClass(
       class extends NestedDecorations {
         constructor(view) {
-          super(view, this.cm);
+          super(view, cm);
         }
       },
       { decorations: value => value.decorations }
