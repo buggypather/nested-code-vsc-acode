@@ -161,3 +161,181 @@ export function tokenizeJson(
 export function tokenizeJsonc(source: string): NestedToken[] {
   return tokenizeJson(source, { allowComments: true });
 }
+
+
+export type HostLanguage = "javascript" | "typescript";
+
+export type EmbeddedRegionKind = "string" | "markup" | "interpolation";
+
+export interface EmbeddedRegion {
+  kind: EmbeddedRegionKind;
+  start: number;
+  end: number;
+  hostLanguage: HostLanguage;
+}
+
+function skipQuotedHostString(source: string, start: number, quote: "'" | '"'): number {
+  let i = start + 1;
+  while (i < source.length) {
+    if (source[i] === "\\") {
+      i = Math.min(i + 2, source.length);
+      continue;
+    }
+    if (source[i] === quote) return i + 1;
+    i++;
+  }
+  return source.length;
+}
+
+function skipHostComment(source: string, start: number): number {
+  if (source[start + 1] === "/") return scanLineComment(source, start);
+  return scanBlockComment(source, start);
+}
+
+function scanInterpolation(source: string, start: number): number {
+  let depth = 1;
+  let i = start + 2;
+
+  while (i < source.length && depth > 0) {
+    const ch = source[i];
+
+    if (ch === "'" || ch === '"') {
+      i = skipQuotedHostString(source, i, ch);
+      continue;
+    }
+
+    if (ch === "`") {
+      i = scanTemplateLiteralEnd(source, i);
+      continue;
+    }
+
+    if (ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*")) {
+      i = skipHostComment(source, i);
+      continue;
+    }
+
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+    i++;
+  }
+
+  return i;
+}
+
+function scanTemplateLiteralEnd(source: string, start: number): number {
+  let i = start + 1;
+  while (i < source.length) {
+    if (source[i] === "\\") {
+      i = Math.min(i + 2, source.length);
+      continue;
+    }
+    if (source[i] === "`") return i + 1;
+    if (source[i] === "$" && source[i + 1] === "{") {
+      i = scanInterpolation(source, i);
+      continue;
+    }
+    i++;
+  }
+  return source.length;
+}
+
+function looksLikeMarkup(text: string): boolean {
+  // Conservative on purpose: require a tag-like opener rather than treating
+  // comparison operators or generic angle brackets as markup.
+  return /<\s*(?:[A-Za-z][\w:.-]*|!DOCTYPE|!--|\?xml)(?:\s|\/?>)/i.test(text);
+}
+
+function addTemplateContentRegions(
+  source: string,
+  start: number,
+  end: number,
+  language: HostLanguage,
+  output: EmbeddedRegion[]
+): void {
+  let segmentStart = start + 1;
+  let i = segmentStart;
+
+  while (i < end) {
+    if (source[i] === "\\") {
+      i = Math.min(i + 2, end);
+      continue;
+    }
+
+    if (source[i] === "$" && source[i + 1] === "{") {
+      if (i > segmentStart) {
+        const text = source.slice(segmentStart, i);
+        output.push({
+          kind: looksLikeMarkup(text) ? "markup" : "string",
+          start: segmentStart,
+          end: i,
+          hostLanguage: language
+        });
+      }
+      const interpolationEnd = scanInterpolation(source, i);
+      output.push({
+        kind: "interpolation",
+        start: i,
+        end: Math.min(interpolationEnd, end),
+        hostLanguage: language
+      });
+      segmentStart = Math.min(interpolationEnd, end);
+      i = segmentStart;
+      continue;
+    }
+
+    if (source[i] === "`") break;
+    i++;
+  }
+
+  if (i > segmentStart) {
+    const text = source.slice(segmentStart, i);
+    output.push({
+      kind: looksLikeMarkup(text) ? "markup" : "string",
+      start: segmentStart,
+      end: i,
+      hostLanguage: language
+    });
+  }
+}
+
+export function findEmbeddedRegions(
+  source: string,
+  language: HostLanguage
+): EmbeddedRegion[] {
+  const regions: EmbeddedRegion[] = [];
+  let i = 0;
+
+  while (i < source.length) {
+    const ch = source[i];
+
+    if (ch === "/" && (source[i + 1] === "/" || source[i + 1] === "*")) {
+      i = skipHostComment(source, i);
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      const end = skipQuotedHostString(source, i, ch);
+      const contentEnd = end <= source.length && source[end - 1] === ch ? end - 1 : end;
+      const text = source.slice(i + 1, contentEnd);
+      regions.push({
+        kind: looksLikeMarkup(text) ? "markup" : "string",
+        start: i + 1,
+        end: contentEnd,
+        hostLanguage: language
+      });
+      i = end;
+      continue;
+    }
+
+    if (ch === "`") {
+      const end = scanTemplateLiteralEnd(source, i);
+      addTemplateContentRegions(source, i, end, language, regions);
+      i = end;
+      continue;
+    }
+
+    i++;
+  }
+
+  return regions;
+}
