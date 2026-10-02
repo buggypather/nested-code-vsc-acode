@@ -28,7 +28,8 @@ jobs:
             "  </script>",
             "</div>`;"
           ].join("\n");
-          console.log("CLOSE", source.indexOf("<script"), source.indexOf("</script>"), findRecursiveBlockClose(source, source.indexOf("<script>") + 8, source.length, "script"));\n          console.log("COMPILED_EMBEDDED", findEmbeddedRegions(source, "typescript").map(r => ({kind:r.kind,start:r.start,end:r.end,text:source.slice(r.start,r.end)})));
+          console.log("CLOSE", source.indexOf("<script>"), source.indexOf("</script>"), findRecursiveBlockClose(source, source.indexOf("<script>") + 8, source.length, "script"));
+          console.log("COMPILED_EMBEDDED", findEmbeddedRegions(source, "typescript").map(r => ({kind:r.kind,start:r.start,end:r.end,text:source.slice(r.start,r.end)})));
           console.log("COMPILED_RECURSIVE", findRecursiveEmbeddedRegions(source, "typescript").map(r => ({kind:r.kind,language:r.language,start:r.start,end:r.end,text:source.slice(r.start,r.end)})));
           NODE
           echo '--- EMITTED SCANNER ---' >> test-output.txt
