@@ -60,6 +60,16 @@
         "id": "nestedInvalid",
         "superType": "string",
         "description": "Malformed nested markup recovered by the parser."
+      },
+      {
+        "id": "punctuation",
+        "superType": "operator",
+        "description": "Punctuation in structured nested code."
+      },
+      {
+        "id": "invalid",
+        "superType": "string",
+        "description": "Invalid structured nested code."
       }
     ]
   }
