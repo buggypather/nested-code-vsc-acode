@@ -243,6 +243,7 @@ function scanTemplateLiteralEnd(source: string, start: number): number {
       nextInterpolation === -1 ? source.length : nextInterpolation
     ];
     const nextDelimiter = Math.min(...nextDelimiterCandidates);
+    if (nextScript !== -1) console.error("SCAN_DEBUG", { i, nextBacktick, nextInterpolation, nextScript, nextDelimiter });
 
     if (nextScript !== -1 && nextScript < nextDelimiter) {
       const openEnd = source.indexOf(">", nextScript + 7);
