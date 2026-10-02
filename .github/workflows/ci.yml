@@ -31,6 +31,8 @@ jobs:
           console.log("COMPILED_EMBEDDED", findEmbeddedRegions(source, "typescript").map(r => ({kind:r.kind,start:r.start,end:r.end,text:source.slice(r.start,r.end)})));
           console.log("COMPILED_RECURSIVE", findRecursiveEmbeddedRegions(source, "typescript").map(r => ({kind:r.kind,language:r.language,start:r.start,end:r.end,text:source.slice(r.start,r.end)})));
           NODE
+          echo '--- EMITTED SCANNER ---' >> test-output.txt
+          grep -A55 'function scanTemplateLiteralEnd' packages/core/dist/index.js >> test-output.txt
           npm test >> test-output.txt 2>&1
           status=$?
           cat test-output.txt
