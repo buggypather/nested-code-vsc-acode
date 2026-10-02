@@ -653,6 +653,8 @@ function findRecursiveBlockClose(
   return end;
 }
 
+export { findRecursiveBlockClose };
+
 function findRecursiveHostRegions(
   source: string,
   start: number,
