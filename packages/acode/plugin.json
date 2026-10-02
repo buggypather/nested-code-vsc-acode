@@ -1,0 +1,9 @@
+{
+  "id": "nested.code",
+  "name": "Nested Code",
+  "main": "dist/main.js",
+  "version": "0.1.0",
+  "readme": "README.md",
+  "icon": "icon.png",
+  "files": []
+}
