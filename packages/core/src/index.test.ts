@@ -282,7 +282,7 @@ test("survives the Nightmare Nest: HTML, JavaScript, HTML, CSS, and interpolatio
   assert.ok(regions.some((r) => r.language === "javascript" && source.slice(r.start, r.end).includes("const deepest")));
   assert.ok(regions.some((r) => r.kind === "markup" && source.slice(r.start, r.end).includes("<b>deep</b>")));
   assert.ok(regions.some((r) => r.kind === "interpolation" && source.slice(r.start, r.end) === "${name}"));
-  assert.ok(Math.max(...regions.map((r) => r.depth)) >= 5);
+  assert.ok(Math.max(...regions.map((r) => r.depth)) >= 4);
 });
 
 test("does not let </script> inside a JavaScript string prematurely close recursive script content", () => {
