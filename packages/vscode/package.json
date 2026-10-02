@@ -4,14 +4,63 @@
   "description": "Syntax highlighting for nested and embedded languages.",
   "version": "0.1.0",
   "publisher": "buggypather",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Programming Languages"],
-  "activationEvents": ["onLanguage:json", "onLanguage:jsonc"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:json",
+    "onLanguage:jsonc",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact"
+  ],
   "main": "./dist/extension.js",
-  "scripts": { "build": "tsc -p tsconfig.json" },
-  "dependencies": { "@nested-code/core": "0.1.0" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nested-code/core": "0.1.0"
+  },
   "devDependencies": {
     "@types/vscode": "^1.90.0",
     "typescript": "^5.9.0"
+  },
+  "contributes": {
+    "semanticTokenTypes": [
+      {
+        "id": "nestedTag",
+        "superType": "type",
+        "description": "HTML/XML tag inside another language."
+      },
+      {
+        "id": "nestedAttribute",
+        "superType": "property",
+        "description": "HTML/XML attribute inside another language."
+      },
+      {
+        "id": "nestedAttributeValue",
+        "superType": "string",
+        "description": "HTML/XML attribute value inside another language."
+      },
+      {
+        "id": "nestedComment",
+        "superType": "comment",
+        "description": "Comment in nested markup."
+      },
+      {
+        "id": "nestedCdata",
+        "superType": "string",
+        "description": "CDATA, doctype, or processing instruction in nested markup."
+      },
+      {
+        "id": "nestedInvalid",
+        "superType": "string",
+        "description": "Malformed nested markup recovered by the parser."
+      }
+    ]
   }
 }
