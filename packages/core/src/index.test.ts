@@ -215,7 +215,6 @@ test("recurses HTML script content back into JavaScript and then HTML", () => {
   const regions = findRecursiveEmbeddedRegions(source, "typescript");
   const markup = regions.filter((r) => r.kind === "markup");
   const scripts = regions.filter((r) => r.language === "javascript");
-  console.error("DEBUG2", regions.map((r) => ({kind:r.kind, language:r.language, start:r.start, end:r.end, text:source.slice(r.start,r.end)})));
   assert.ok(markup.some((r) => source.slice(r.start, r.end).includes("<div>")));
   assert.ok(scripts.some((r) => source.slice(r.start, r.end).includes("const inner")));
   assert.ok(markup.some((r) => source.slice(r.start, r.end).includes("<span>")));
