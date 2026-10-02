@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findEmbeddedRegions, tokenizeJson, tokenizeJsonc } from "./index.js";
+import { findEmbeddedRegions, tokenizeJson, tokenizeJsonc, tokenizeMarkup } from "./index.js";
 
 test("tracks deeply nested JSON properties and values", () => {
   const source = '{"user":{"settings":{"editor":{"enabled":true}}}}';
@@ -132,4 +132,72 @@ test("unterminated template literals remain recoverable", () => {
 
   assert.equal(regions[0].kind, "markup");
   assert.equal(regions[0].end, source.length);
+});
+
+
+test("tokenizes HTML tags, attributes, values, and text", () => {
+  const source = '<div class="card" data-id=42>Hello <b>world</b></div>';
+  const tokens = tokenizeMarkup(source);
+
+  assert.deepEqual(
+    tokens.filter((t) => t.kind === "tag").map((t) => source.slice(t.start, t.end)),
+    ["div", "b", "b", "div"]
+  );
+  assert.deepEqual(
+    tokens.filter((t) => t.kind === "attribute").map((t) => source.slice(t.start, t.end)),
+    ["class", "data-id"]
+  );
+  assert.deepEqual(
+    tokens.filter((t) => t.kind === "attributeValue").map((t) => source.slice(t.start, t.end)),
+    ['"card"', "42"]
+  );
+});
+
+test("tokenizes XML namespaces and self-closing elements", () => {
+  const source = '<?xml version="1.0"?><svg:svg><svg:path d="M0 0"/></svg:svg>';
+  const tokens = tokenizeMarkup(source);
+
+  assert.equal(tokens[0].kind, "processingInstruction");
+  assert.ok(tokens.some((t) => t.kind === "tag" && source.slice(t.start, t.end) === "svg:path"));
+  assert.ok(tokens.some((t) => t.kind === "attribute" && source.slice(t.start, t.end) === "d"));
+  assert.ok(tokens.some((t) => t.kind === "punctuation" && source.slice(t.start, t.end) === "/>"));
+});
+
+test("recognizes markup comments, CDATA, and doctypes", () => {
+  const source = '<!DOCTYPE html><root><!-- note --><![CDATA[<not-a-tag>]]></root>';
+  const tokens = tokenizeMarkup(source);
+
+  assert.ok(tokens.some((t) => t.kind === "doctype"));
+  assert.ok(tokens.some((t) => t.kind === "comment"));
+  assert.ok(tokens.some((t) => t.kind === "cdata"));
+  assert.equal(tokens.filter((t) => t.kind === "tag").length, 2);
+});
+
+test("markup token depth follows nested elements", () => {
+  const source = "<a><b><c>x</c></b></a>";
+  const tokens = tokenizeMarkup(source);
+  const opens = tokens.filter((t) => t.kind === "tag").slice(0, 3);
+
+  assert.deepEqual(opens.map((t) => t.depth), [0, 1, 2]);
+});
+
+test("tokenizes only markup slices around TypeScript interpolation", () => {
+  const source = 'const page = `<section class="x"><h1>${user.name}</h1></section>`;';
+  const regions = findEmbeddedRegions(source, "typescript");
+  const markup = regions
+    .filter((r) => r.kind === "markup")
+    .flatMap((r) => tokenizeMarkup(source, r.start, r.end));
+
+  assert.equal(regions.filter((r) => r.kind === "interpolation").length, 1);
+  assert.ok(markup.some((t) => t.kind === "tag" && source.slice(t.start, t.end) === "section"));
+  assert.equal(markup.some((t) => source.slice(t.start, t.end).includes("user.name")), false);
+});
+
+test("incomplete markup stays tokenizable while typing", () => {
+  const source = '<div class="unfinished';
+  const tokens = tokenizeMarkup(source);
+
+  assert.ok(tokens.some((t) => t.kind === "tag"));
+  assert.ok(tokens.some((t) => t.kind === "attribute"));
+  assert.ok(tokens.some((t) => t.kind === "attributeValue"));
 });
