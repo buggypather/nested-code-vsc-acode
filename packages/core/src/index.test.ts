@@ -201,3 +201,46 @@ test("incomplete markup stays tokenizable while typing", () => {
   assert.ok(tokens.some((t) => t.kind === "attribute"));
   assert.ok(tokens.some((t) => t.kind === "attributeValue"));
 });
+
+test("recurses HTML script content back into JavaScript and then HTML", () => {
+  const source = [
+    "const page = `",
+    "<div>",
+    "  <script>",
+    "    const inner = `<span>${name}</span>`;",
+    "  </script>",
+    "</div>`;"
+  ].join("\n");
+
+  const regions = findRecursiveEmbeddedRegions(source, "typescript");
+  const markup = regions.filter((r) => r.kind === "markup");
+  const scripts = regions.filter((r) => r.language === "javascript");
+
+  assert.ok(markup.some((r) => source.slice(r.start, r.end).includes("<div>")));
+  assert.ok(scripts.some((r) => source.slice(r.start, r.end).includes("const inner")));
+  assert.ok(markup.some((r) => source.slice(r.start, r.end).includes("<span>")));
+});
+
+test("recurses HTML style blocks while preserving the host HTML region", () => {
+  const source = "const page = `<main><style>.card { color: red; }</style></main>`;";
+  const regions = findRecursiveEmbeddedRegions(source, "javascript");
+
+  assert.ok(regions.some((r) => r.language === "html" && r.kind === "markup"));
+  assert.ok(regions.some((r) => r.language === "css" && source.slice(r.start, r.end).includes(".card")));
+});
+
+test("deep recursive nesting survives multiple HTML and JavaScript layers", () => {
+  const source = [
+    "const a = `<div>",
+    "  <script>const b = `<section><script>const c = `<b>deep</b>`;</script></section>`;</script>",
+    "</div>`;"
+  ].join("\n");
+
+  const regions = findRecursiveEmbeddedRegions(source, "typescript");
+  const deepMarkup = regions.filter(
+    (r) => r.kind === "markup" && source.slice(r.start, r.end).includes("<b>deep</b>")
+  );
+
+  assert.equal(deepMarkup.length, 1);
+  assert.ok(regions.some((r) => r.depth >= 4));
+});
