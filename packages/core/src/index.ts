@@ -234,6 +234,26 @@ function scanTemplateLiteralEnd(source: string, start: number): number {
       i = scanInterpolation(source, i);
       continue;
     }
+
+    // A template literal can contain HTML whose <script> block contains
+    // another JavaScript template literal. That inner backtick must not close
+    // the outer host template.
+    if (/^<script(?:\s|>)/i.test(source.slice(i))) {
+      const openEnd = source.indexOf(">", i + 7);
+      if (openEnd !== -1) {
+        const close = findRecursiveBlockClose(
+          source,
+          openEnd + 1,
+          source.length,
+          "script"
+        );
+        if (close >= source.length) return source.length;
+        const closeEnd = source.indexOf(">", close + 2);
+        i = closeEnd === -1 ? source.length : closeEnd + 1;
+        continue;
+      }
+    }
+
     i++;
   }
   return source.length;
