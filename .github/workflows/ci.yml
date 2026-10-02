@@ -13,18 +13,5 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - name: Run tests with diagnostic log
-        shell: bash
-        run: |
-          set +e
-          npm test > test-output.txt 2>&1
-          status=$?
-          cat test-output.txt
-          exit $status
-      - name: Upload test diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-diagnostic
-          path: test-output.txt
+      - run: npm test
       - run: npm run build
