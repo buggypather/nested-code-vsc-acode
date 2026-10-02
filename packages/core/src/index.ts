@@ -680,7 +680,11 @@ function findRecursiveHostRegions(
         }
         if (childEnd >= absoluteEnd) break;
       }
-    }(
+    }
+  }
+}
+
+export function findRecursiveEmbeddedRegions(
   source: string,
   language: HostLanguage
 ): RecursiveEmbeddedRegion[] {
