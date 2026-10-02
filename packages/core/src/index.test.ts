@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findEmbeddedRegions, findRecursiveEmbeddedRegions, tokenizeJson, tokenizeJsonc, tokenizeMarkup } from "./index.js";
+import { findEmbeddedRegions, findRecursiveEmbeddedRegions, tokenizeCss, tokenizeJson, tokenizeJsonc, tokenizeMarkup } from "./index.js";
 
 test("tracks deeply nested JSON properties and values", () => {
   const source = '{"user":{"settings":{"editor":{"enabled":true}}}}';
@@ -243,4 +243,17 @@ test("deep recursive nesting survives multiple HTML and JavaScript layers", () =
 
   assert.equal(deepMarkup.length, 1);
   assert.ok(regions.some((r) => r.depth >= 4));
+});
+
+test("tokenizes CSS inside a recursive style block", () => {
+  const source = "const page = `<style>.card { color: red; margin: 12px; }</style>`;";
+  const regions = findRecursiveEmbeddedRegions(source, "javascript");
+  const css = regions.find((r) => r.language === "css");
+
+  assert.ok(css);
+  const tokens = tokenizeCss(source, css.start, css.end);
+  assert.ok(tokens.some((t) => t.kind === "selector" && source.slice(t.start, t.end) === ".card"));
+  assert.ok(tokens.some((t) => t.kind === "property" && source.slice(t.start, t.end) === "color"));
+  assert.ok(tokens.some((t) => t.kind === "value" && source.slice(t.start, t.end) === "red"));
+  assert.ok(tokens.some((t) => t.kind === "number" && source.slice(t.start, t.end) === "12px"));
 });
