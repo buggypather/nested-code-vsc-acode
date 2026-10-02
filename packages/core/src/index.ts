@@ -555,6 +555,24 @@ function findTagContentStart(source: string, nameToken: MarkupToken, limit: numb
   return i < limit ? i + 1 : limit;
 }
 
+function isInsideRecursiveHostRegion(
+  source: string,
+  start: number,
+  position: number,
+  language: HostLanguage
+): boolean {
+  if (position <= start) return false;
+
+  const prefix = source.slice(start, position);
+  const regions = findEmbeddedRegions(prefix, language);
+  return regions.some(
+    (region) =>
+      (region.kind === "string" || region.kind === "markup") &&
+      region.start <= prefix.length &&
+      region.end >= prefix.length
+  );
+}
+
 function findRecursiveHostRegions(
   source: string,
   start: number,
@@ -594,6 +612,18 @@ function findRecursiveHostRegions(
           const match = stack.map((entry) => entry.name).lastIndexOf(name);
           if (match === -1) continue;
           const entry = stack[match];
+
+          // A closing tag-looking sequence inside JavaScript source can be
+          // part of a quoted string or template literal. Do not terminate the
+          // HTML script region until the candidate is outside host-language
+          // string/markup content.
+          if (
+            name === "script" &&
+            isInsideRecursiveHostRegion(source, entry.contentStart, token.start, "javascript")
+          ) {
+            continue;
+          }
+
           stack.splice(match);
 
           if ((name === "script" || name === "style") && entry.contentStart < token.start) {
