@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findEmbeddedRegions, tokenizeJson, tokenizeJsonc, tokenizeMarkup } from "./index.js";
+import { findEmbeddedRegions, findRecursiveEmbeddedRegions, tokenizeJson, tokenizeJsonc, tokenizeMarkup } from "./index.js";
 
 test("tracks deeply nested JSON properties and values", () => {
   const source = '{"user":{"settings":{"editor":{"enabled":true}}}}';
