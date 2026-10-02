@@ -257,3 +257,60 @@ test("tokenizes CSS inside a recursive style block", () => {
   assert.ok(tokens.some((t) => t.kind === "value" && source.slice(t.start, t.end) === "red"));
   assert.ok(tokens.some((t) => t.kind === "number" && source.slice(t.start, t.end) === "12px"));
 });
+
+
+test("survives the Nightmare Nest: HTML, JavaScript, HTML, CSS, and interpolation", () => {
+  const source = [
+    "const page = `",
+    "<article>",
+    "  <script>",
+    "    const nested = `<section>",
+    "      <style>.card { color: red; padding: 8px; }</style>",
+    "      <script>",
+    "        const deepest = `<b>deep</b> ${name}`;",
+    "      </script>",
+    "    </section>`;",
+    "  </script>",
+    "</article>`;"
+  ].join("\n");
+
+  const regions = findRecursiveEmbeddedRegions(source, "typescript");
+
+  assert.ok(regions.some((r) => r.language === "html" && source.slice(r.start, r.end).includes("<article>")));
+  assert.ok(regions.some((r) => r.language === "javascript" && source.slice(r.start, r.end).includes("const nested")));
+  assert.ok(regions.some((r) => r.language === "html" && source.slice(r.start, r.end).includes("<section>")));
+  assert.ok(regions.some((r) => r.language === "css" && source.slice(r.start, r.end).includes(".card")));
+  assert.ok(regions.some((r) => r.language === "javascript" && source.slice(r.start, r.end).includes("const deepest")));
+  assert.ok(regions.some((r) => r.kind === "markup" && source.slice(r.start, r.end).includes("<b>deep</b>")));
+  assert.ok(regions.some((r) => r.kind === "interpolation" && source.slice(r.start, r.end) === "${name}"));
+  assert.ok(Math.max(...regions.map((r) => r.depth)) >= 6);
+});
+
+test("does not let </script> inside a JavaScript string prematurely close recursive script content", () => {
+  const source = [
+    "const page = `<script>",
+    "  const text = \"</script>\";",
+    "  const inner = `<span>still HTML</span>`;",
+    "</script>`;"
+  ].join("\n");
+
+  const regions = findRecursiveEmbeddedRegions(source, "typescript");
+  const scripts = regions.filter((r) => r.language === "javascript");
+
+  assert.ok(scripts.some((r) => source.slice(r.start, r.end).includes("const inner")));
+  assert.ok(regions.some((r) => r.kind === "markup" && source.slice(r.start, r.end).includes("<span>still HTML</span>")));
+});
+
+test("recursion recovers from an unfinished nested template and malformed closing tags", () => {
+  const source = [
+    "const page = `<main>",
+    "  <script>const nested = `<div><span>unfinished",
+    "  </script>",
+    "</main>`;"
+  ].join("\n");
+
+  const regions = findRecursiveEmbeddedRegions(source, "typescript");
+
+  assert.ok(regions.some((r) => r.language === "javascript" && source.slice(r.start, r.end).includes("const nested")));
+  assert.ok(regions.some((r) => r.kind === "markup" && source.slice(r.start, r.end).includes("<div><span>unfinished")));
+});
