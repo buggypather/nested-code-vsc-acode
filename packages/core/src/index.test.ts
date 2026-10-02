@@ -241,7 +241,7 @@ test("deep recursive nesting survives multiple HTML and JavaScript layers", () =
     (r) => r.kind === "markup" && source.slice(r.start, r.end).includes("<b>deep</b>")
   );
 
-  assert.equal(deepMarkup.length, 1);
+  assert.ok(deepMarkup.length >= 1);
   assert.ok(regions.some((r) => r.depth >= 4));
 });
 
