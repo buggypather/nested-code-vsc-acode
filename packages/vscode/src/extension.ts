@@ -4,6 +4,7 @@ import {
   tokenizeJson,
   tokenizeJsonc,
   tokenizeMarkup,
+  tokenizeCss,
   type MarkupTokenKind,
   type TokenKind
 } from "@nested-code/core";
@@ -80,6 +81,25 @@ class NestedProvider implements vscode.DocumentSemanticTokensProvider {
           invalid: "nestedInvalid",
           text: null,
           punctuation: null
+        };
+        const type = mapped[token.kind];
+        if (type) pushToken(builder, document, token.start, token.end, type);
+      }
+    }
+
+    for (const region of regions) {
+      if (region.language !== "css") continue;
+      for (const token of tokenizeCss(text, region.start, region.end)) {
+        const mapped: Record<string, string | null> = {
+          selector: "nestedTag",
+          property: "nestedAttribute",
+          value: "nestedAttributeValue",
+          number: "number",
+          string: "string",
+          comment: "nestedComment",
+          atRule: "keyword",
+          punctuation: "operator",
+          invalid: "nestedInvalid"
         };
         const type = mapped[token.kind];
         if (type) pushToken(builder, document, token.start, token.end, type);
