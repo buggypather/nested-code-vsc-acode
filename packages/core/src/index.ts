@@ -224,38 +224,53 @@ function scanInterpolation(source: string, start: number): number {
 
 function scanTemplateLiteralEnd(source: string, start: number): number {
   let i = start + 1;
+
   while (i < source.length) {
     if (source[i] === "\\") {
       i = Math.min(i + 2, source.length);
       continue;
     }
-    if (source[i] === "`") return i + 1;
-    if (source[i] === "$" && source[i + 1] === "{") {
+
+    const nextBacktick = source.indexOf("`", i);
+    const nextInterpolation = source.indexOf("${", i);
+    const nextScript = source.toLowerCase().indexOf("<script", i);
+
+    // If an embedded <script> starts before the next host-template delimiter,
+    // consume that entire script block as nested content. Its JavaScript
+    // backticks belong to the child language, not this template.
+    const nextDelimiterCandidates = [
+      nextBacktick === -1 ? source.length : nextBacktick,
+      nextInterpolation === -1 ? source.length : nextInterpolation
+    ];
+    const nextDelimiter = Math.min(...nextDelimiterCandidates);
+
+    if (nextScript !== -1 && nextScript < nextDelimiter) {
+      const openEnd = source.indexOf(">", nextScript + 7);
+      if (openEnd === -1) return source.length;
+
+      const close = findRecursiveBlockClose(
+        source,
+        openEnd + 1,
+        source.length,
+        "script"
+      );
+      if (close >= source.length) return source.length;
+
+      const closeEnd = source.indexOf(">", close + 2);
+      i = closeEnd === -1 ? source.length : closeEnd + 1;
+      continue;
+    }
+
+    if (nextBacktick === i) return i + 1;
+
+    if (nextInterpolation === i) {
       i = scanInterpolation(source, i);
       continue;
     }
 
-    // A template literal can contain HTML whose <script> block contains
-    // another JavaScript template literal. That inner backtick must not close
-    // the outer host template.
-    if (/^<script(?:\s|>)/i.test(source.slice(i))) {
-      const openEnd = source.indexOf(">", i + 7);
-      if (openEnd !== -1) {
-        const close = findRecursiveBlockClose(
-          source,
-          openEnd + 1,
-          source.length,
-          "script"
-        );
-        if (close >= source.length) return source.length;
-        const closeEnd = source.indexOf(">", close + 2);
-        i = closeEnd === -1 ? source.length : closeEnd + 1;
-        continue;
-      }
-    }
-
     i++;
   }
+
   return source.length;
 }
 
