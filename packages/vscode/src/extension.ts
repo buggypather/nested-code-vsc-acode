@@ -23,7 +23,9 @@ const tokenTypes = [
   "nestedAttributeValue",
   "nestedComment",
   "nestedCdata",
-  "nestedInvalid"
+  "nestedInvalid",
+  "keyword",
+  "operator"
 ] as const;
 
 const legend = new vscode.SemanticTokensLegend([...tokenTypes]);
