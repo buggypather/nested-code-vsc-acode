@@ -643,3 +643,132 @@ export function findRecursiveEmbeddedRegions(
   findRecursiveHostRegions(source, 0, source.length, language, 0, output);
   return output.sort((a, b) => a.start - b.start || a.end - b.end);
 }
+
+
+export type CssTokenKind =
+  | "selector"
+  | "property"
+  | "value"
+  | "number"
+  | "string"
+  | "comment"
+  | "atRule"
+  | "punctuation"
+  | "invalid";
+
+export interface CssToken {
+  kind: CssTokenKind;
+  start: number;
+  end: number;
+  depth: number;
+}
+
+export function tokenizeCss(source: string, start = 0, end = source.length): CssToken[] {
+  const tokens: CssToken[] = [];
+  const limit = Math.min(source.length, Math.max(start, end));
+  let i = Math.max(0, start);
+  let depth = 0;
+  let inBlock = false;
+  let expectingProperty = false;
+
+  while (i < limit) {
+    if (isWhitespace(source[i])) {
+      i++;
+      continue;
+    }
+
+    if (source.startsWith("/*", i)) {
+      const close = source.indexOf("*/", i + 2);
+      const tokenEnd = close === -1 || close + 2 > limit ? limit : close + 2;
+      tokens.push({ kind: "comment", start: i, end: tokenEnd, depth });
+      i = tokenEnd;
+      continue;
+    }
+
+    if (source[i] === "{" ) {
+      tokens.push({ kind: "punctuation", start: i, end: i + 1, depth });
+      depth++;
+      inBlock = true;
+      expectingProperty = true;
+      i++;
+      continue;
+    }
+
+    if (source[i] === "}") {
+      tokens.push({ kind: "punctuation", start: i, end: i + 1, depth: Math.max(0, depth - 1) });
+      depth = Math.max(0, depth - 1);
+      inBlock = depth > 0;
+      expectingProperty = inBlock;
+      i++;
+      continue;
+    }
+
+    if (source[i] === ":" || source[i] === ";" || source[i] === ",") {
+      tokens.push({ kind: "punctuation", start: i, end: i + 1, depth });
+      expectingProperty = source[i] === ";" && inBlock;
+      i++;
+      continue;
+    }
+
+    if (source[i] === "'" || source[i] === '"') {
+      const quote = source[i];
+      const valueStart = i;
+      i++;
+      while (i < limit) {
+        if (source[i] === "\\") {
+          i = Math.min(i + 2, limit);
+          continue;
+        }
+        if (source[i] === quote) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      tokens.push({
+        kind: "string",
+        start: valueStart,
+        end: i,
+        depth
+      });
+      continue;
+    }
+
+    if (source[i] === "@") {
+      const tokenStart = i++;
+      while (i < limit && /[A-Za-z-]/.test(source[i])) i++;
+      tokens.push({ kind: "atRule", start: tokenStart, end: i, depth });
+      continue;
+    }
+
+    if (/[0-9.]/.test(source[i]) && (/[0-9]/.test(source[i]) || source[i] === ".")) {
+      const tokenStart = i;
+      while (i < limit && /[A-Za-z0-9.%+-]/.test(source[i])) i++;
+      tokens.push({ kind: "number", start: tokenStart, end: i, depth });
+      continue;
+    }
+
+    const tokenStart = i;
+    while (
+      i < limit &&
+      !isWhitespace(source[i]) &&
+      !"{}:;,\"'".includes(source[i]) &&
+      !source.startsWith("/*", i)
+    ) i++;
+
+    if (i === tokenStart) {
+      tokens.push({ kind: "invalid", start: i, end: i + 1, depth });
+      i++;
+      continue;
+    }
+
+    tokens.push({
+      kind: expectingProperty ? "property" : inBlock ? "value" : "selector",
+      start: tokenStart,
+      end: i,
+      depth
+    });
+  }
+
+  return tokens;
+}
