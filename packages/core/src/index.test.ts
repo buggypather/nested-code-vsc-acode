@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { tokenizeJson, tokenizeJsonc } from "./index.js";
+import { findEmbeddedRegions, tokenizeJson, tokenizeJsonc } from "./index.js";
 
 test("tracks deeply nested JSON properties and values", () => {
   const source = '{"user":{"settings":{"editor":{"enabled":true}}}}';
@@ -76,4 +76,60 @@ test("very deep nesting preserves depth rather than imposing a parser limit", ()
   const number = tokenizeJson(source).find((t) => t.kind === "number");
 
   assert.equal(number?.depth, depth);
+});
+
+
+test("detects HTML inside a TypeScript template literal", () => {
+  const source = 'const page = `<div class="card"><h1>Hello</h1></div>`;';
+  const regions = findEmbeddedRegions(source, "typescript");
+
+  assert.equal(regions.length, 1);
+  assert.equal(regions[0].kind, "markup");
+  assert.equal(source.slice(regions[0].start, regions[0].end), '<div class="card"><h1>Hello</h1></div>');
+});
+
+test("template interpolation returns to host language and then markup", () => {
+  const source = 'const page = `<h1>${user.name}</h1>`;';
+  const regions = findEmbeddedRegions(source, "typescript");
+
+  assert.deepEqual(regions.map((r) => r.kind), ["markup", "interpolation", "markup"]);
+  assert.equal(source.slice(regions[1].start, regions[1].end), "${user.name}");
+});
+
+test("nested braces and strings inside interpolation do not terminate it early", () => {
+  const source = 'const x = `<p>${format({value: "}"})}</p>`;';
+  const regions = findEmbeddedRegions(source, "javascript");
+  const interpolation = regions.find((r) => r.kind === "interpolation");
+
+  assert.equal(source.slice(interpolation!.start, interpolation!.end), '${format({value: "}"})}');
+});
+
+test("ordinary strings and less-than comparisons are not classified as markup", () => {
+  const source = 'const a = "hello"; const b = `value: ${x < 10}`;';
+  const regions = findEmbeddedRegions(source, "javascript");
+
+  assert.equal(regions.some((r) => r.kind === "markup"), false);
+});
+
+test("HTML in a normal quoted JavaScript string is detected", () => {
+  const source = "const x = '<span>hello</span>';";
+  const regions = findEmbeddedRegions(source, "javascript");
+
+  assert.equal(regions[0].kind, "markup");
+});
+
+test("host comments containing fake markup strings are ignored", () => {
+  const source = '// const x = "<fake></fake>"\nconst y = "plain";';
+  const regions = findEmbeddedRegions(source, "javascript");
+
+  assert.equal(regions.length, 1);
+  assert.equal(regions[0].kind, "string");
+});
+
+test("unterminated template literals remain recoverable", () => {
+  const source = 'const x = `<section>still typing';
+  const regions = findEmbeddedRegions(source, "typescript");
+
+  assert.equal(regions[0].kind, "markup");
+  assert.equal(regions[0].end, source.length);
 });
