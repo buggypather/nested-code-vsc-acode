@@ -555,22 +555,66 @@ function findTagContentStart(source: string, nameToken: MarkupToken, limit: numb
   return i < limit ? i + 1 : limit;
 }
 
-function isInsideRecursiveHostRegion(
+function findRecursiveBlockClose(
   source: string,
   start: number,
-  position: number,
-  language: HostLanguage
-): boolean {
-  if (position <= start) return false;
+  end: number,
+  tagName: "script" | "style"
+): number {
+  let i = start;
+  const backslash = String.fromCharCode(92);
 
-  const prefix = source.slice(start, position);
-  const regions = findEmbeddedRegions(prefix, language);
-  return regions.some(
-    (region) =>
-      (region.kind === "string" || region.kind === "markup") &&
-      region.start <= prefix.length &&
-      region.end >= prefix.length
-  );
+  while (i < end) {
+    if (tagName === "script") {
+      if (source[i] === "'" || source[i] === '"') {
+        i = skipQuotedHostString(source, i, source[i]);
+        continue;
+      }
+      if (source[i] === "`") {
+        i = scanTemplateLiteralEnd(source, i);
+        continue;
+      }
+      if (source[i] === "/" && (source[i + 1] === "/" || source[i + 1] === "*")) {
+        i = skipHostComment(source, i);
+        continue;
+      }
+    } else {
+      if (source.startsWith("/*", i)) {
+        const close = source.indexOf("*/", i + 2);
+        i = close === -1 ? end : Math.min(close + 2, end);
+        continue;
+      }
+      if (source[i] === "'" || source[i] === '"') {
+        const quote = source[i];
+        i++;
+        while (i < end) {
+          if (source[i] === backslash) {
+            i = Math.min(i + 2, end);
+            continue;
+          }
+          if (source[i] === quote) {
+            i++;
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+    }
+
+    if (
+      source[i] === "<" &&
+      source[i + 1] === "/" &&
+      source.slice(i + 2, i + 2 + tagName.length).toLowerCase() === tagName &&
+      !/[A-Za-z0-9_:.-]/.test(source[i + 2 + tagName.length] ?? "")
+    ) {
+      return i;
+    }
+
+    i++;
+  }
+
+  return end;
 }
 
 function findRecursiveHostRegions(
@@ -600,72 +644,43 @@ function findRecursiveHostRegions(
 
     if (region.kind === "markup") {
       const tokens = tokenizeMarkup(source, absoluteStart, absoluteEnd);
-      const stack: Array<{ name: string; contentStart: number }> = [];
 
-      for (const token of tokens) {
+      for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+        const token = tokens[tokenIndex];
         if (token.kind !== "tag") continue;
+
         const name = tagNameAt(source, token);
         const before = source.slice(Math.max(absoluteStart, token.start - 2), token.start);
         const closing = before.includes("</");
 
-        if (closing) {
-          const match = stack.map((entry) => entry.name).lastIndexOf(name);
-          if (match === -1) continue;
-          const entry = stack[match];
+        if (closing || (name !== "script" && name !== "style")) continue;
 
-          // A closing tag-looking sequence inside JavaScript source can be
-          // part of a quoted string or template literal. Do not terminate the
-          // HTML script region until the candidate is outside host-language
-          // string/markup content.
-          if (
-            name === "script" &&
-            isInsideRecursiveHostRegion(source, entry.contentStart, token.start, "javascript")
-          ) {
-            continue;
-          }
+        const childStart = findTagContentStart(source, token, absoluteEnd);
+        const childEnd = findRecursiveBlockClose(source, childStart, absoluteEnd, name);
 
-          stack.splice(match);
-
-          if ((name === "script" || name === "style") && entry.contentStart < token.start) {
-            const childStart = entry.contentStart;
-            const childEnd = token.start;
-
-            output.push({
-              kind: "string",
-              start: childStart,
-              end: childEnd,
-              hostLanguage: "javascript",
-              language: name === "script" ? "javascript" : "css",
-              parentLanguage: "html",
-              depth: depth + 1
-            });
-
-            if (name === "script") {
-              findRecursiveHostRegions(
-                source,
-                childStart,
-                childEnd,
-                "javascript",
-                depth + 2,
-                output
-              );
-            }
-          }
-          continue;
-        }
-
-        if (name === "script" || name === "style") {
-          stack.push({
-            name,
-            contentStart: findTagContentStart(source, token, absoluteEnd)
+        if (childStart < childEnd) {
+          output.push({
+            kind: "string",
+            start: childStart,
+            end: childEnd,
+            hostLanguage: "javascript",
+            language: name === "script" ? "javascript" : "css",
+            parentLanguage: "html",
+            depth: depth + 1
           });
-        }
-      }
-    }
-  }
-}
 
-export function findRecursiveEmbeddedRegions(
+          if (name === "script") {
+            findRecursiveHostRegions(source, childStart, childEnd, "javascript", depth + 2, output);
+          }
+        }
+
+        // Tokens inside an embedded script/style belong to the child language.
+        while (tokenIndex + 1 < tokens.length && tokens[tokenIndex + 1].start < childEnd) {
+          tokenIndex++;
+        }
+        if (childEnd >= absoluteEnd) break;
+      }
+    }(
   source: string,
   language: HostLanguage
 ): RecursiveEmbeddedRegion[] {
