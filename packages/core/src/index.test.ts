@@ -232,7 +232,7 @@ test("recurses HTML style blocks while preserving the host HTML region", () => {
 test("deep recursive nesting survives multiple HTML and JavaScript layers", () => {
   const source = [
     "const a = `<div>",
-    "  <script>const b = `<section><script>const c = `<b>deep</b>`;</script></section>`;</script>",
+    "  <script>const b = \\`<section><script>const c = \\`<b>deep</b>\\`;</script></section>\\`;</script>",
     "</div>`;"
   ].join("\n");
 
