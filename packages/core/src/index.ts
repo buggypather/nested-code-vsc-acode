@@ -243,8 +243,6 @@ function scanTemplateLiteralEnd(source: string, start: number): number {
       nextInterpolation === -1 ? source.length : nextInterpolation
     ];
     const nextDelimiter = Math.min(...nextDelimiterCandidates);
-    if (nextScript !== -1) console.error("SCAN_DEBUG", { i, nextBacktick, nextInterpolation, nextScript, nextDelimiter });
-
     if (nextScript !== -1 && nextScript < nextDelimiter) {
       const openEnd = source.indexOf(">", nextScript + 7);
       if (openEnd === -1) return source.length;
@@ -296,6 +294,29 @@ function addTemplateContentRegions(
     if (source[i] === "\\") {
       i = Math.min(i + 2, end);
       continue;
+    }
+
+    if (source[i] === "<") {
+      const lower = source.toLowerCase();
+      const tagName = lower.startsWith("<script", i)
+        ? "script"
+        : lower.startsWith("<style", i)
+          ? "style"
+          : null;
+
+      if (tagName && /^(?:<script|<style)(?:\s|>)/.test(lower.slice(i))) {
+        const openEnd = source.indexOf(">", i + tagName.length + 1);
+        if (openEnd !== -1) {
+          const close = findRecursiveBlockClose(source, openEnd + 1, end, tagName);
+          if (close >= end) {
+            i = end;
+            continue;
+          }
+          const closeEnd = source.indexOf(">", close + 2);
+          i = closeEnd === -1 ? end : closeEnd + 1;
+          continue;
+        }
+      }
     }
 
     if (source[i] === "$" && source[i + 1] === "{") {
@@ -654,7 +675,6 @@ function findRecursiveBlockClose(
   return end;
 }
 
-export { findRecursiveBlockClose };
 
 function findRecursiveHostRegions(
   source: string,
