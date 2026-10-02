@@ -7,7 +7,7 @@
     "build": "npm run build:core && npm run build:vscode && npm run build:acode",
     "build:core": "npm run build -w @nested-code/core",
     "build:vscode": "npm run build -w nested-code-vscode",
-    "build:acode": "npm run build -w nested.code",
+    "build:acode": "npm run build -w nested-code-acode",
     "test": "npm run test -w @nested-code/core"
   },
   "devDependencies": {
