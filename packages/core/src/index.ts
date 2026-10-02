@@ -567,7 +567,8 @@ function findRecursiveBlockClose(
   while (i < end) {
     if (tagName === "script") {
       if (source[i] === "'" || source[i] === '"') {
-        i = skipQuotedHostString(source, i, source[i]);
+        const quote = source[i] as "'" | '"';
+        i = skipQuotedHostString(source, i, quote);
         continue;
       }
       if (source[i] === "`") {
