@@ -741,7 +741,7 @@ export function tokenizeCss(source: string, start = 0, end = source.length): Css
       continue;
     }
 
-    if (/[0-9.]/.test(source[i]) && (/[0-9]/.test(source[i]) || source[i] === ".")) {
+    if (/[0-9]/.test(source[i]) || (source[i] === "." && /[0-9]/.test(source[i + 1] ?? ""))) {
       const tokenStart = i;
       while (i < limit && /[A-Za-z0-9.%+-]/.test(source[i])) i++;
       tokens.push({ kind: "number", start: tokenStart, end: i, depth });
