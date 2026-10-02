@@ -240,9 +240,10 @@ function scanTemplateLiteralEnd(source: string, start: number): number {
 }
 
 function looksLikeMarkup(text: string): boolean {
-  // Conservative on purpose: require a tag-like opener rather than treating
-  // comparison operators or generic angle brackets as markup.
-  return /<\s*(?:[A-Za-z][\w:.-]*|!DOCTYPE|!--|\?xml)(?:\s|\/?>)/i.test(text);
+  // Recognize opening and closing tag fragments. Template interpolation can
+  // split one markup document so a continuation may begin with </tag>.
+  // Requiring a valid name keeps comparisons such as x < 10 out.
+  return /<\s*\/?\s*(?:[A-Za-z][\w:.-]*|!DOCTYPE|!--|\?xml)(?:\s|\/?>)/i.test(text);
 }
 
 function addTemplateContentRegions(
